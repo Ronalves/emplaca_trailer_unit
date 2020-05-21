@@ -1,0 +1,207 @@
+ 
+ entre as linhas 102 e 110 armazena o reboque e da 172 a 202 emplaca
+ 
+ 
+ METHOD atualiza_of.
+
+    DATA io_ref TYPE REF TO yocltm_global_codes.
+    DATA:tt_torid             TYPE /scmtms/t_tor_id,
+         tt_key               TYPE /bobf/t_frw_key,
+         tt_item              TYPE /scmtms/t_tor_item_tr_k,
+         tt_mod               TYPE /bobf/t_frw_modification,
+         lo_change            TYPE REF TO /bobf/if_tra_change,
+         lo_message           TYPE REF TO /bobf/if_frw_message,
+         lr_s_item            TYPE REF TO /scmtms/s_tor_item_tr_k,
+         lr_s_item2           TYPE REF TO /scmtms/s_tor_item_tr_k,
+         lr_s_item3           TYPE REF TO /scmtms/s_tor_item_tr_k,
+         wc_existe            TYPE abap_bool,
+         wc_key               TYPE /bobf/conf_key,
+         ti_result            TYPE type_tresid,
+         ln_rejected          TYPE boole_d,
+         imp_key_bp           TYPE /bobf/t_frw_key,
+         smp_key_bp           TYPE /bobf/s_frw_key,
+         et_return 	          TYPE bapiret2_tab,
+         lt_chaged_fields     TYPE /bobf/t_frw_name,
+         lv_pais              TYPE /scmtms/d_torite-country,
+         imp_key_fu           TYPE /bobf/t_frw_key,
+         lv_placa_reboque(20) TYPE c,
+         lv_placa_reboque2(20) TYPE c.
+
+    CONSTANTS: cc_dri(3)       TYPE c VALUE 'DRI',
+               cc_itemid(10)   TYPE c VALUE '0001000000',
+               cc_itemid10(10) TYPE c VALUE '0001000010',
+               cc_itemid20(10) TYPE c VALUE '0001000020',
+               cc_pvr(3)       TYPE c VALUE 'PVR',
+               cc_02(2)        TYPE c VALUE '02',
+               cc_bo(3)        TYPE c VALUE 'TOR'.
+
+    DATA(io_svc_mngr) = /bobf/cl_tra_serv_mgr_factory=>get_service_manager(
+    /scmtms/if_tor_c=>sc_bo_key ).
+    DATA(io_bo_conf) = /bobf/cl_frw_factory=>get_configuration(
+    /scmtms/if_tor_c=>sc_bo_key ).
+    DATA(io_txn_mngr) = /bobf/cl_tra_trans_mgr_factory=>get_transaction_manager( ).
+
+    DATA(io_tor) = NEW /scmtms/cl_tor_helper_root( ).
+
+    lv_pais = pais.
+
+    APPEND p_of TO tt_torid.
+
+    io_tor->get_key_from_torid(
+    EXPORTING
+      it_torid        = tt_torid
+       IMPORTING
+         et_torkey    = tt_key
+      ).
+
+    SELECT SINGLE partner_guid FROM but000 INTO @DATA(lv_keybp) WHERE partner = @p_bp.
+    CREATE OBJECT io_ref.
+
+    smp_key_bp-key = lv_keybp.
+    APPEND smp_key_bp TO imp_key_bp.
+
+*Início - Ronaldo Alves - 18.03.2020.
+*Copiei o método 'cria_bp_mot_of' que é da classe cria_bp_mot_of para esta classe
+*yocltm_cnhportal para poder fazer as alterações necessárias sem alterar o original
+*que pode estar sendo usado em outros lugares.
+    cria_bp_mot_of(
+    EXPORTING
+      imp_key_fu = imp_key_fu
+      imp_key_fo = tt_key
+      imp_key_bp = imp_key_bp
+    IMPORTING
+      et_return  = et_return
+      ).
+*Fim - Ronaldo Alves - 18.03.2020.
+*---------------------------------------------------------------------------------------------
+
+    CALL METHOD io_svc_mngr->retrieve_by_association
+      EXPORTING
+        iv_node_key    = /scmtms/if_tor_c=>sc_node-root
+        it_key         = tt_key
+        iv_association = /scmtms/if_tor_c=>sc_association-root-item_tr
+        iv_fill_data   = abap_true
+      IMPORTING
+        et_data        = tt_item.
+
+*    APPEND 'ITEM_DESCR' TO lt_chaged_fields.
+*
+*    LOOP AT tt_item REFERENCE INTO DATA(lo_item1).
+*      IF lo_item1->item_cat = /scmtms/if_tor_const=>sc_tor_item_category-driver.
+*        lo_item1->item_descr = motorista.
+*
+*        APPEND INITIAL LINE TO tt_mod ASSIGNING FIELD-SYMBOL(<ls_mod1>).
+*        <ls_mod1>-node           = /scmtms/if_tor_c=>sc_node-item_tr.
+*        <ls_mod1>-change_mode    = /bobf/if_frw_c=>sc_modify_update.
+*        <ls_mod1>-key            = lo_item1->key.
+*        <ls_mod1>-data           = lo_item1.
+*        <ls_mod1>-changed_fields = lt_chaged_fields[].
+*        CLEAR lr_s_item.
+*      ENDIF.
+*    ENDLOOP.
+
+    LOOP AT tt_item INTO DATA(e_item).
+      DATA(ln_tabix) = sy-tabix.
+
+      IF e_item-item_cat = /scmtms/if_tor_const=>sc_tor_item_category-pv_item.
+        IF lv_placa_reboque IS INITIAL.
+          lv_placa_reboque = placa.
+          DATA(e_item_pvr) = e_item.
+        else.
+          lv_placa_reboque2 = placa3.
+          DATA(e_item_pvr2) = e_item.
+        ENDIF.
+      ENDIF.
+
+      IF e_item-item_id = cc_itemid.
+        e_item-platenumber = placa_stand.
+        e_item-country = pais.
+        MODIFY tt_item FROM e_item INDEX ln_tabix.
+      ENDIF.
+
+      IF e_item-item_id = cc_itemid10.
+        wc_key = e_item-key.
+        e_item-platenumber = placa.
+        e_item-country = pais.
+        MODIFY tt_item FROM e_item INDEX ln_tabix.
+      ENDIF.
+
+      IF e_item-item_id = cc_itemid20.
+        e_item-platenumber = placa3.
+        e_item-country = pais.
+        MODIFY tt_item FROM e_item INDEX ln_tabix.
+      ENDIF.
+    ENDLOOP.
+
+    APPEND 'PLATENUMBER' TO lt_chaged_fields.
+    APPEND 'COUNTRY'     TO lt_chaged_fields.
+*
+    LOOP AT tt_item REFERENCE INTO DATA(lo_item).
+      IF lo_item->item_id <> cc_itemid.
+        DATA(wc_itparent) = e_item-item_parent_key.
+      ENDIF.
+*      CREATE DATA lr_s_item.
+*      lr_s_item->*  = e_item.
+      APPEND INITIAL LINE TO tt_mod ASSIGNING FIELD-SYMBOL(<ls_mod>).
+      <ls_mod>-node           = /scmtms/if_tor_c=>sc_node-item_tr.
+      <ls_mod>-change_mode    = /bobf/if_frw_c=>sc_modify_update.
+      <ls_mod>-key            = lo_item->key.
+      <ls_mod>-data           = lo_item.
+      <ls_mod>-changed_fields = lt_chaged_fields[].
+*      CLEAR lr_s_item.
+    ENDLOOP.
+
+    CALL METHOD io_svc_mngr->modify
+      EXPORTING
+        it_modification = tt_mod
+      IMPORTING
+        eo_change       = lo_change
+        eo_message      = lo_message.
+
+    CALL METHOD io_txn_mngr->save
+      IMPORTING
+        eo_message  = lo_message
+        ev_rejected = ln_rejected.
+
+    IF ln_rejected IS INITIAL.
+      imputa_placa(
+        EXPORTING
+          country = lv_pais
+          p_key = wc_key
+          placa = placa
+      ).
+    ENDIF.
+
+*    Unidade de reboque.
+    IF e_item_pvr-orig_ref_root IS NOT INITIAL.
+      SELECT SINGLE db_key FROM /scmtms/d_torrot INTO @DATA(lv_key_reboque) WHERE db_key = @e_item_pvr-orig_ref_root.
+      IF sy-subrc = 0.
+        SELECT SINGLE db_key FROM /scmtms/d_torite INTO @DATA(lv_key_reboque_it) WHERE parent_key = @lv_key_reboque
+                                                                                   AND item_cat = @/scmtms/if_tor_const=>sc_tor_item_category-pv_item.
+        IF sy-subrc = 0.
+          imputa_placa(
+          EXPORTING
+            country = lv_pais
+            p_key = lv_key_reboque_it
+            placa = lv_placa_reboque
+            ).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF e_item_pvr2-orig_ref_root IS NOT INITIAL.
+      SELECT SINGLE db_key FROM /scmtms/d_torrot INTO @DATA(lv_key_reboque2) WHERE db_key = @e_item_pvr2-orig_ref_root.
+      IF sy-subrc = 0.
+        SELECT SINGLE db_key FROM /scmtms/d_torite INTO @DATA(lv_key_reboque_it2) WHERE parent_key = @lv_key_reboque2
+                                                                                   AND item_cat = @/scmtms/if_tor_const=>sc_tor_item_category-pv_item.
+        IF sy-subrc = 0.
+          imputa_placa(
+          EXPORTING
+            country = lv_pais
+            p_key = lv_key_reboque_it2
+            placa = lv_placa_reboque2
+            ).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
